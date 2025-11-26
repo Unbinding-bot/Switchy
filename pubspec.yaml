@@ -11,6 +11,17 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.2
 
+  # --- REQUIRED DEPENDENCIES ADDED ---
+  # For local settings persistence
+  shared_preferences: ^2.2.2
+  # For date and time formatting (used in graphing/logging)
+  intl: ^0.18.1
+  # For file storage paths (used by CSVLogger)
+  path_provider: ^2.1.1
+  # For converting data to CSV format
+  csv: ^5.1.1
+  # -----------------------------------
+
   # Pin wifi_iot to the latest published compatible version to avoid
   # "version solving failed" when ^0.3.25 is not available in pub.dev.
   wifi_iot: ^0.3.19+2
