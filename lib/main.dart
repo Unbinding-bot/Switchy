@@ -73,8 +73,10 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
   }
 
   Future<void> _start() async {
+    // Attempt to connect to the configured ESP Wi-Fi network
     _connectedToWifi = await _wifi.connectToNetwork(_espSsid, _espPassword);
     setState(() {});
+    // If Wi-Fi is connected, attempt to connect to the ESP client
     if (_connectedToWifi) {
       await _esp.connect(_espHost, _espPort);
     }
@@ -84,19 +86,24 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
     double? value;
     raw = raw.trim();
     try {
+      // Direct parse
       value = double.parse(raw);
     } catch (_) {
+      // Fallback: Check if data is wrapped (e.g., {"value": 12.3})
       if (raw.contains('value')) {
         final match = RegExp(r'(-?\d+(\.\d+)?)').firstMatch(raw);
         if (match != null) value = double.tryParse(match.group(0)!);
       }
     }
+    
     if (value != null) {
       final m = Measurement(DateTime.now(), value);
       setState(() {
         _data.add(m);
+        // Keep the data list size manageable
         if (_data.length > 200) _data.removeAt(0);
       });
+      // Log measurement to CSV
       await _csv.append(_prefs, m);
     }
   }
@@ -104,10 +111,13 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
   Future<void> _toggleSwitch(bool newValue) async {
     setState(() => _switchOn = newValue);
     final msg = newValue ? _msgOn : _msgOff;
+    
     if (_espConnected) {
       await _esp.send(msg);
     } else {
+      // If not connected, try to reconnect to the ESP
       if (_connectedToWifi) await _esp.connect(_espHost, _espPort);
+      // If reconnection succeeds, send the message
       if (_espConnected) await _esp.send(msg);
     }
   }
@@ -124,6 +134,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
         msgOff: _msgOff,
       ),
     );
+    // Reload settings and restart connection if settings were saved (result is true)
     if (result == true) {
       await _loadSettings();
       await _start();
@@ -135,10 +146,12 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(_connectedToWifi ? Icons.wifi : Icons.wifi_off,
-            color: _connectedToWifi ? Colors.green : Colors.red),
+            color: _connectedToWifi ? Colors.green : Colors.red,
+            tooltip: _connectedToWifi ? 'Connected to ESP Wi-Fi' : 'Not connected to ESP Wi-Fi'),
         SizedBox(width: 8),
         Icon(_espConnected ? Icons.usb : Icons.usb_off,
-            color: _espConnected ? Colors.green : Colors.red),
+            color: _espConnected ? Colors.green : Colors.red,
+            tooltip: _espConnected ? 'ESP Client Connected' : 'ESP Client Disconnected'),
       ],
     );
   }
@@ -154,6 +167,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
 
     final minTime = _data.first.time.millisecondsSinceEpoch.toDouble();
     final spots = _data.map((m) {
+      // X-axis is time difference in seconds from the first measurement
       final x = (m.time.millisecondsSinceEpoch.toDouble() - minTime) / 1000.0;
       return FlSpot(x, m.value.toDouble());
     }).toList();
@@ -170,19 +184,40 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
           LineChartData(
             minX: 0,
             maxX: maxX,
-            minY: minY - 1,
-            maxY: maxY + 1,
+            minY: minY - 1, // Add buffer for better visualization
+            maxY: maxY + 1, // Add buffer for better visualization
             lineBarsData: [
-              LineChartBarData(spots: spots, isCurved: true, dotData: FlDotData(show: false)),
+              LineChartBarData(
+                spots: spots, 
+                isCurved: true, 
+                color: Colors.blue, // Curve color
+                barWidth: 3,
+                dotData: FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
             ],
             gridData: FlGridData(show: true),
             titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: (v, meta) {
-                final seconds = v.toInt();
-                final display = DateFormat('HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch((minTime + seconds * 1000).toInt()));
-                return Text(display, style: TextStyle(fontSize: 10));
-              })),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true, 
+                  reservedSize: 28, 
+                  interval: (maxX / 5).clamp(10, 60).toDouble(), // dynamic interval
+                  getTitlesWidget: (v, meta) {
+                    final seconds = v.toInt();
+                    // Convert seconds back to DateTime for formatted display
+                    final display = DateFormat('HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch((minTime + seconds * 1000).toInt()));
+                    return Padding(padding: const EdgeInsets.only(top: 8.0), child: Text(display, style: TextStyle(fontSize: 10)));
+                  }
+                )
+              ),
               leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)),
+              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            borderData: FlBorderData(
+              show: true,
+              border: Border.all(color: const Color(0xff37434d), width: 1),
             ),
           ),
         ),
@@ -208,6 +243,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
+          _data.clear(); // Clear data on manual refresh for a fresh start/test
           await _start();
         },
         child: SingleChildScrollView(
@@ -215,6 +251,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
           child: Column(
             children: [
               SizedBox(height: 24),
+              // --- Power Switch Card ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Card(
@@ -227,10 +264,11 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
                         Text('Power', style: TextStyle(fontSize: 24)),
                         Switch(
                           value: _switchOn,
-                          onChanged: (v) => _toggleSwitch(v),
+                          onChanged: _espConnected ? (v) => _toggleSwitch(v) : null, // Disable switch if ESP not connected
                           activeColor: Colors.green,
                           activeTrackColor: Colors.greenAccent,
                           inactiveThumbColor: Colors.grey,
+                          inactiveTrackColor: Colors.grey.shade300,
                         ),
                       ],
                     ),
@@ -238,21 +276,37 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
                 ),
               ),
               SizedBox(height: 12),
+              // --- Graph ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: _buildGraph(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Text('Live Data Stream (Last 200 Points)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                    _buildGraph(),
+                  ],
+                ),
               ),
               SizedBox(height: 24),
+              // --- Recent Data List ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
-                  children: _data.reversed.take(10).map((m) {
-                    return ListTile(
-                      dense: true,
-                      title: Text('${m.value}'),
-                      subtitle: Text(DateFormat('yyyy-MM-dd HH:mm:ss').format(m.time)),
-                    );
-                  }).toList(),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Recent Measurements', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ..._data.reversed.take(10).map((m) {
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(Icons.timeline, color: Colors.blueAccent),
+                        title: Text('${m.value.toStringAsFixed(2)}'),
+                        subtitle: Text(DateFormat('yyyy-MM-dd HH:mm:ss').format(m.time)),
+                      );
+                    }).toList(),
+                  ],
                 ),
               ),
               SizedBox(height: 48),
@@ -260,6 +314,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
           ),
         ),
       ),
+      // --- Floating Action Button for CSV Export ---
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.file_download),
         tooltip: 'Export CSV now',
@@ -272,12 +327,14 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
   }
 }
 
+// --- Data Model Class ---
 class Measurement {
   final DateTime time;
   final double value;
   Measurement(this.time, this.value);
 }
 
+// --- Settings Dialog Widget ---
 class SettingsDialog extends StatefulWidget {
   final String ssid;
   final String password;
@@ -317,6 +374,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       title: Text('Settings'),
       content: SingleChildScrollView(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: _ssid, decoration: InputDecoration(labelText: 'ESP SSID')),
             TextField(controller: _pwd, decoration: InputDecoration(labelText: 'ESP Password (if any)')),
@@ -334,6 +392,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         TextButton(
             onPressed: () async {
               final prefs = await SharedPreferences.getInstance();
+              // Save settings
               await prefs.setString('esp_ssid', _ssid.text.trim());
               await prefs.setString('esp_pwd', _pwd.text);
               await prefs.setString('esp_host', _host.text.trim());
