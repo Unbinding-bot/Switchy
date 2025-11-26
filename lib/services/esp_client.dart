@@ -1,68 +1,98 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
-/// Simple TCP client for talking to an ESP device.
-/// This file fixes the StreamTransformer type mismatch: Socket streams
-/// produce Uint8List; we explicitly convert Uint8List -> String before
-/// using LineSplitter.
-class ESPClient {
+// Callback function types defined for clarity
+typedef void ConnectionCallback(bool connected);
+typedef void DataCallback(String data);
+
+class EspClient {
   Socket? _socket;
-  StreamSubscription<String>? _sub;
+  bool _isConnected = false;
 
-  final void Function(String line)? onLine;
-  final void Function()? onDone;
-  final void Function(Object error)? onError;
+  // --- Callbacks (used by SingleScreenController in main.dart) ---
+  ConnectionCallback? onConnectionState;
+  DataCallback? onData;
 
-  ESPClient({this.onLine, this.onDone, this.onError});
+  /// Attempts to establish a TCP connection to the ESP host and port.
+  Future<bool> connect(String host, int port) async {
+    if (_isConnected) {
+      await dispose();
+    }
 
-  Future<void> connect(String host, int port, {Duration timeout = const Duration(seconds: 5)}) async {
-    await close();
-    _socket = await Socket.connect(host, port).timeout(timeout);
+    try {
+      debugPrint('Attempting to connect to $host:$port...');
+      
+      // Attempt to connect with a 5-second timeout
+      _socket = await Socket.connect(host, port, timeout: Duration(seconds: 5));
+      
+      _isConnected = true;
+      onConnectionState?.call(true);
+      debugPrint('Connected successfully.');
 
-    // Convert Stream<Uint8List> -> Stream<String> and then split into lines.
-    _sub = _socket!
-        .transform(StreamTransformer<Uint8List, String>.fromHandlers(
-          handleData: (Uint8List data, EventSink<String> sink) {
-            // decode chunk and pass on
-            try {
-              sink.add(utf8.decode(data));
-            } catch (e) {
-              // If decode fails, attempt fallback
-              sink.add(String.fromCharCodes(data));
-            }
-          },
-        ))
-        .transform(const LineSplitter())
-        .listen((line) {
-          if (onLine != null) onLine!(line);
-        }, onDone: () {
-          if (onDone != null) onDone!();
-        }, onError: (e) {
-          if (onError != null) onError!(e);
-        });
-  }
+      // Set up listeners for the socket
+      _socket!.listen(
+        (List<int> data) {
+          // Decode the incoming byte data to a string
+          final rawData = utf8.decode(data).trim();
+          debugPrint('Received raw data: "$rawData"');
+          onData?.call(rawData);
+        },
+        onError: (error) {
+          debugPrint('Socket error: $error');
+          dispose(); // Automatically disconnect and clean up on error
+        },
+        onDone: () {
+          debugPrint('Socket disconnected (onDone)');
+          dispose(); // Automatically disconnect when the remote end closes the connection
+        },
+        cancelOnError: true,
+      );
 
-  /// Send a raw string (appends newline if you want).
-  void send(String data) {
-    if (_socket != null) {
-      _socket!.write(data);
-    } else {
-      throw StateError('Socket not connected');
+      return true;
+    } catch (e) {
+      debugPrint('Connection failed: $e');
+      dispose(); // Ensure cleanup if connection fails
+      return false;
     }
   }
 
-  /// Close socket and subscription.
-  Future<void> close() async {
-    await _sub?.cancel();
-    _sub = null;
+  /// Sends a string message to the connected ESP device.
+  Future<void> send(String message) async {
+    if (_socket == null || !_isConnected) {
+      debugPrint('Cannot send message: Not connected.');
+      return;
+    }
+    
     try {
-      await _socket?.flush();
-      await _socket?.close();
-    } catch (_) {}
-    _socket = null;
+      // It's common practice to append a newline (\n) as a message terminator 
+      // when communicating with microcontrollers over TCP.
+      final dataToSend = utf8.encode('$message\n');
+      _socket!.add(dataToSend);
+      // Wait for the data to be written to the underlying socket
+      await _socket!.flush(); 
+      debugPrint('Sent: "$message"');
+    } catch (e) {
+      debugPrint('Error sending data: $e');
+      // If sending fails, assume connection is lost
+      dispose();
+    }
   }
 
-  bool get isConnected => _socket != null;
+  /// Closes the connection and resets the connection state.
+  Future<void> dispose() async {
+    if (_socket != null) {
+      debugPrint('Disposing ESP client...');
+      // Close the socket gracefully
+      await _socket!.close();
+      _socket = null;
+    }
+    if (_isConnected) {
+      _isConnected = false;
+      onConnectionState?.call(false);
+    }
+  }
+
+  bool get isConnected => _isConnected;
 }
