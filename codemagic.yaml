@@ -1,0 +1,39 @@
+workflows:
+  android-release:
+    name: Android Release Build
+    environment:
+      flutter: stable
+      vars:
+        KEYSTORE_PASSWORD: Encrypted:YOUR_KEYSTORE_PASSWORD
+        KEY_PASSWORD: Encrypted:YOUR_KEY_PASSWORD
+        KEY_ALIAS: my-key-alias
+        KEYSTORE_FILE: $CM_BUILD_DIR/android/my-release-key.jks
+    scripts:
+      - name: Deep Clean Cache and Get Packages 🐛
+        script: |
+          echo "Performing deep cache clean to fix intl dependency linkage..."
+          # Manually remove the global pub cache directory to eliminate bad references
+          rm -rf $HOME/.pub-cache
+          
+          # Clean Flutter artifacts
+          flutter clean
+          
+          # Re-fetch dependencies, ensuring the full intl package is downloaded and linked correctly
+          flutter pub get
+
+      - name: Generate key.properties
+        script: |
+          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "storeFile=$KEYSTORE_FILE" >> android/key.properties
+
+      - name: Build universal APK
+        script: flutter build apk --release --no-shrink
+
+      - name: Build release AAB
+        script: flutter build appbundle --release --no-shrink
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/app-release.aab

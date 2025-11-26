@@ -1,0 +1,89 @@
+import 'package:flutter/material.dart';
+import '../services/heatmap_service.dart';
+
+class PlantStatusLegend extends StatelessWidget {
+  final Axis axis;
+  final double spacing;
+  final bool isDense;
+  final bool numericOnly;
+
+  const PlantStatusLegend({super.key, this.axis = Axis.horizontal, this.spacing = 8.0, this.isDense = true, this.numericOnly = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = getPlantStatusLegendItems();
+    final textStyle = Theme.of(context).textTheme.bodySmall;
+
+    if (axis == Axis.vertical) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: items.map((item) => _LegendItem(item: item, textStyle: textStyle, isDense: isDense, labelOverride: numericOnly ? item.code.toString() : null)).toList(),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items
+            .map((item) => Padding(
+                  padding: EdgeInsets.only(right: spacing),
+                  child: _LegendChip(item: item, dense: true, labelOverride: numericOnly ? item.code.toString() : null),
+                ))
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final PlantStatusCategoryItem item;
+  final TextStyle? textStyle;
+  final bool isDense;
+  final String? labelOverride;
+
+  const _LegendItem({required this.item, required this.textStyle, required this.isDense, this.labelOverride});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: isDense ? 12 : 16, height: isDense ? 12 : 16, decoration: BoxDecoration(color: item.color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(labelOverride ?? item.label, style: textStyle),
+      ],
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  final PlantStatusCategoryItem item;
+  final bool dense;
+  final String? labelOverride;
+  const _LegendChip({required this.item, this.dense = false, this.labelOverride});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 4 : 6),
+      margin: const EdgeInsets.only(right: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1C1F) : Colors.white,
+        borderRadius: BorderRadius.circular(dense ? 14 : 18),
+        border: Border.all(color: item.color, width: dense ? 1.0 : 1.5),
+        boxShadow: [
+          BoxShadow(color: item.color.withOpacity(0.15), blurRadius: 6, spreadRadius: 1, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: dense ? 8 : 10, height: dense ? 8 : 10, decoration: BoxDecoration(color: item.color, shape: BoxShape.circle)),
+          SizedBox(width: dense ? 4 : 6),
+          Text(labelOverride ?? item.label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
