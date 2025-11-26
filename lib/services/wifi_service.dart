@@ -1,18 +1,30 @@
+import 'dart:async';
 import 'package:wifi_iot/wifi_iot.dart';
 
 class WifiService {
-  Future<bool> connectToNetwork(String ssid, String password) async {
-    try {
-      bool connected = false;
-      if (password.isEmpty) {
-        connected = await WiFiForIoTPlugin.connect(ssid, joinOnce: true, withInternet: false);
-      } else {
-        connected = await WiFiForIoTPlugin.connect(ssid, password: password, joinOnce: true, withInternet: false);
-      }
-      return connected;
-    } catch (e) {
-      print('Wifi connect failed: $e');
-      return false;
-    }
+  /// Returns true if WiFi is enabled on the device.
+  Future<bool?> isEnabled() {
+    return WiFiForIoTPlugin.isEnabled();
+  }
+
+  /// Return a list of available networks (platform dependent).
+  Future<List<dynamic>?> loadWifiList() {
+    return WiFiForIoTPlugin.loadWifiList();
+  }
+
+  /// Connect to an access point. Adjust options (security) as needed.
+  /// Example:
+  ///   await connect('my-ssid', password: 'mypassword');
+  Future<bool?> connect(String ssid, {String? password, NetworkSecurity? security}) {
+    return WiFiForIoTPlugin.connect(
+      ssid,
+      password: password ?? '',
+      security: security ?? NetworkSecurity.WPA,
+    );
+  }
+
+  /// Disconnect from current WiFi.
+  Future<bool?> disconnect() {
+    return WiFiForIoTPlugin.disconnect();
   }
 }
