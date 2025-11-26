@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.1.0
-  wifi_iot: ^0.3.25
+  wifi_iot: ^0.3.19+2
   path_provider: ^2.0.11
   file_picker: ^5.2.2
   fl_chart: ^0.60.0
