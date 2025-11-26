@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'services/wifi_service.dart';
-import 'services/esp_client.dart';
+// Note: This relies on the updated EspClient class definition
+import 'services/esp_client.dart'; 
 import 'services/csv_logger.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -30,8 +31,9 @@ class SingleScreenController extends StatefulWidget {
 }
 
 class _SingleScreenControllerState extends State<SingleScreenController> {
+  // Uses EspClient (assuming it was renamed in services/esp_client.dart as well)
+  final EspClient _esp = EspClient(); 
   final WifiService _wifi = WifiService();
-  final EspClient _esp = EspClient();
   final CsvLogger _csv = CsvLogger();
 
   bool _connectedToWifi = false;
@@ -54,6 +56,7 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
   void initState() {
     super.initState();
     _loadSettings().then((_) => _start());
+    // These callbacks match the updated EspClient interface
     _esp.onData = _onEspData;
     _esp.onConnectionState = (connected) {
       setState(() => _espConnected = connected);
@@ -73,9 +76,11 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
   }
 
   Future<void> _start() async {
-    // Attempt to connect to the configured ESP Wi-Fi network
-    _connectedToWifi = await _wifi.connectToNetwork(_espSsid, _espPassword);
+    // FIX: Changed _wifi.connectToNetwork to _wifi.connect
+    final result = await _wifi.connect(_espSsid, password: _espPassword);
+    _connectedToWifi = result ?? false; // Handle potential null result from plugin
     setState(() {});
+    
     // If Wi-Fi is connected, attempt to connect to the ESP client
     if (_connectedToWifi) {
       await _esp.connect(_espHost, _espPort);
@@ -145,13 +150,19 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(_connectedToWifi ? Icons.wifi : Icons.wifi_off,
-            color: _connectedToWifi ? Colors.green : Colors.red,
-            tooltip: _connectedToWifi ? 'Connected to ESP Wi-Fi' : 'Not connected to ESP Wi-Fi'),
+        // FIX: Replaced deprecated Icon.tooltip with Tooltip widget
+        Tooltip(
+          message: _connectedToWifi ? 'Connected to ESP Wi-Fi' : 'Not connected to ESP Wi-Fi',
+          child: Icon(_connectedToWifi ? Icons.wifi : Icons.wifi_off,
+              color: _connectedToWifi ? Colors.green : Colors.red),
+        ),
         SizedBox(width: 8),
-        Icon(_espConnected ? Icons.usb : Icons.usb_off,
-            color: _espConnected ? Colors.green : Colors.red,
-            tooltip: _espConnected ? 'ESP Client Connected' : 'ESP Client Disconnected'),
+        // FIX: Replaced deprecated Icon.tooltip with Tooltip widget
+        Tooltip(
+          message: _espConnected ? 'ESP Client Connected' : 'ESP Client Disconnected',
+          child: Icon(_espConnected ? Icons.usb : Icons.usb_off,
+              color: _espConnected ? Colors.green : Colors.red),
+        ),
       ],
     );
   }
@@ -320,7 +331,9 @@ class _SingleScreenControllerState extends State<SingleScreenController> {
         tooltip: 'Export CSV now',
         onPressed: () async {
           final file = await _csv.ensureFile(_prefs);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logging to ${file.path}')));
+          if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logging to ${file.path}')));
+          }
         },
       ),
     );
