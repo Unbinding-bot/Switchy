@@ -1,25 +1,30 @@
 name: switchy
-description: A single-screen ESP controller
-publish_to: 'none'
-version: 1.0.0+1
+description: A small WiFi/ESP helper app (patched)
+publish_to: 'none' # private repo
 
 environment:
-  sdk: '>=2.17.0 <3.0.0'
+  sdk: ">=2.17.0 <3.0.0"
+  flutter: ">=2.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  shared_preferences: ^2.1.0
+  cupertino_icons: ^1.0.2
+
+  # Pin wifi_iot to the latest published compatible version to avoid
+  # "version solving failed" when ^0.3.25 is not available in pub.dev.
   wifi_iot: ^0.3.19+2
-  path_provider: ^2.0.11
-  file_picker: ^5.2.2
-  fl_chart: ^0.60.0
-  csv: ^5.0.0
-  intl: ^0.18.0
+
+  # fl_chart version bumped to avoid MediaQuery.boldTextOverride API mismatch.
+  fl_chart: ^1.1.1
+
+  # optional: bump file_picker to silence desktop plugin warnings (non-fatal)
+  file_picker: ^10.3.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
