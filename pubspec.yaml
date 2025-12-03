@@ -1,4 +1,4 @@
-name: switchy
+name: Switchy
 description: A small WiFi/ESP helper app (patched)
 publish_to: 'none' # private repo
 
